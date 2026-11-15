@@ -1,5 +1,9 @@
 package com.mochyy.mochymusic.ui.player.video
 
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.rememberLottieComposition
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.foundation.layout.width
@@ -234,14 +238,27 @@ internal fun BoxScope.VideoTopBar(
                         .padding(horizontal = 9.dp)
                         .semantics { contentDescription = "Video quality: $badgeText" },
                 ) {
-                    Text(
-                        text = badgeText,
-                        color = Color.White,
-                        fontFamily = InterFontFamily,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.3.sp,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = badgeText,
+                            color = Color.White,
+                            fontFamily = InterFontFamily,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.3.sp,
+                        )
+                        if (badgeText == "4K") {
+                            val flameComposition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.flame_4k))
+                            LottieAnimation(
+                                composition = flameComposition,
+                                iterations = LottieConstants.IterateForever,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
+                    }
                 }
             }
             TopButton(R.drawable.fullscreen_exit, stringResource(R.string.video_mode_exit_full_screen), guarded(onExitFullScreen))

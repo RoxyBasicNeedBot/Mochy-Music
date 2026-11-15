@@ -1,8 +1,23 @@
 package com.mochyy.mochymusic.ui.player.video
 
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.rememberLottieComposition
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -22,6 +38,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +51,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import coil3.compose.AsyncImage
 import com.mochyy.mochymusic.LocalPlayerConnection
 import com.mochyy.mochymusic.R
@@ -275,18 +294,79 @@ internal fun qualityLabel(quality: VideoQuality, session: YouTubeVideoSession?):
     }
 }
 
+private data class QualityOptionUi(
+    val quality: VideoQuality,
+    val title: String,
+    val subtitle: String,
+    val badge: String? = null,
+    val showFlame: Boolean = false,
+)
+
+private fun qualityOptionInfo(option: VideoQuality): QualityOptionUi = when (option) {
+    VideoQuality.AUTO -> QualityOptionUi(
+        quality = option,
+        title = "Auto",
+        subtitle = "Adjusts to your connection",
+    )
+    VideoQuality.Q2160 -> QualityOptionUi(
+        quality = option,
+        title = "4K",
+        subtitle = "Sharpest",
+        badge = "Ultra HD",
+        showFlame = true,
+    )
+    VideoQuality.Q1440 -> QualityOptionUi(
+        quality = option,
+        title = "1440p",
+        subtitle = "Very sharp",
+        badge = "2K",
+    )
+    VideoQuality.Q1080 -> QualityOptionUi(
+        quality = option,
+        title = "1080p",
+        subtitle = "Recommended",
+        badge = "Default",
+    )
+    VideoQuality.Q720 -> QualityOptionUi(
+        quality = option,
+        title = "720p",
+        subtitle = "Balanced",
+    )
+    VideoQuality.Q480 -> QualityOptionUi(
+        quality = option,
+        title = "480p",
+        subtitle = "Saves data",
+    )
+    VideoQuality.Q360 -> QualityOptionUi(
+        quality = option,
+        title = "360p",
+        subtitle = "Low data",
+    )
+    VideoQuality.Q240 -> QualityOptionUi(
+        quality = option,
+        title = "240p",
+        subtitle = "Very low data",
+    )
+    VideoQuality.Q144 -> QualityOptionUi(
+        quality = option,
+        title = "144p",
+        subtitle = "Lowest data",
+    )
+}
+
 // auto, then every size this video really comes in (all of them until it has loaded)
 @Composable
 internal fun VideoQualitySheet(session: YouTubeVideoSession?, onDismiss: () -> Unit) {
     val (quality, setQuality) = rememberEnumPreference(VideoQualityKey, VideoQuality.Q1080)
     val sizes = session?.sizes.orEmpty()
     val options = remember(sizes) {
-        listOf(VideoQuality.AUTO) + VideoQuality.entries.filter { quality ->
-            quality != VideoQuality.AUTO &&
-                // when video has loaded, show only sizes it actually has; before that show all so user can pre-pick
-                (sizes.isEmpty() || quality.shortSide in sizes)
+        listOf(VideoQuality.AUTO) + VideoQuality.entries.filter { option ->
+            option != VideoQuality.AUTO && (sizes.isEmpty() || option.shortSide in sizes)
         }
     }
+    val coroutineScope = rememberCoroutineScope()
+    var selectedQuality by remember(quality) { mutableStateOf(quality) }
+
     MenuSheetSurface(onDismiss = onDismiss, wrapHeight = true) { _ ->
         val close = LocalMenuSheetClose.current
         Column(
@@ -294,83 +374,155 @@ internal fun VideoQualitySheet(session: YouTubeVideoSession?, onDismiss: () -> U
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp)
-                .padding(top = 4.dp, bottom = 18.dp),
+                .padding(top = 8.dp, bottom = 22.dp),
         ) {
+            // M3 handle bar
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .width(36.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.3f)),
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Header title & subtitle
             Text(
                 text = stringResource(R.string.video_quality),
                 color = Color.White,
                 fontFamily = InterFontFamily,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 4.dp, bottom = 12.dp),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-0.3).sp,
+                modifier = Modifier.padding(start = 2.dp),
             )
+            Text(
+                text = "Applies to this and all upcoming videos",
+                color = Color.White.copy(alpha = 0.55f),
+                fontFamily = InterFontFamily,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(start = 2.dp, top = 2.dp, bottom = 14.dp),
+            )
+
+            // Quality rows list
             for (option in options) {
+                val info = remember(option) { qualityOptionInfo(option) }
+                val isSelected = option == selectedQuality
                 QualityRow(
-                    title = if (option == VideoQuality.AUTO) {
-                        qualityLabel(VideoQuality.AUTO, session)
-                    } else {
-                        videoSizeName(option.shortSide)
-                    },
-                    description = when {
-                        option == VideoQuality.AUTO -> stringResource(R.string.video_quality_auto_desc)
-                        option == quality -> stringResource(R.string.video_quality_fixed_desc)
-                        option.shortSide > 1080 -> stringResource(R.string.video_quality_sharp_desc)
-                        else -> null
-                    },
-                    selected = option == quality,
+                    info = info,
+                    selected = isSelected,
                     onClick = {
+                        selectedQuality = option
                         setQuality(option)
                         session?.setQuality(option, 2160)
-                        close()
+                        coroutineScope.launch {
+                            delay(260)
+                            close()
+                        }
                     },
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
             }
+
             if (sizes.isEmpty()) {
                 Text(
                     text = stringResource(R.string.video_quality_not_loaded),
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = Color.White.copy(alpha = 0.45f),
                     fontSize = 12.sp,
-                    modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+                    modifier = Modifier.padding(start = 4.dp, top = 8.dp),
                 )
-            }        }
+            }
+        }
     }
 }
 
 @Composable
-private fun QualityRow(title: String, description: String?, selected: Boolean, onClick: () -> Unit) {
+private fun QualityRow(
+    info: QualityOptionUi,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val backgroundColor = if (selected) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.04f)
+    val borderModifier = if (selected) {
+        Modifier.border(BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)), RoundedCornerShape(16.dp))
+    } else {
+        Modifier
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(MenuRowSurface)
+            .then(borderModifier)
+            .background(backgroundColor)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = RemoteFocus,
                 onClick = onClick,
             )
-            .padding(horizontal = 14.dp, vertical = 13.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            if (description != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(
-                    text = description,
-                    color = Color.White.copy(alpha = 0.55f),
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
-                    modifier = Modifier.padding(top = 2.dp),
+                    text = info.title,
+                    color = Color.White,
+                    fontFamily = InterFontFamily,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
                 )
+                if (info.showFlame) {
+                    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.flame_4k))
+                    LottieAnimation(
+                        composition = composition,
+                        iterations = LottieConstants.IterateForever,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                if (info.badge != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.12f))
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = info.badge,
+                            color = Color.White.copy(alpha = 0.75f),
+                            fontFamily = InterFontFamily,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
             }
+            Text(
+                text = info.subtitle,
+                color = Color.White.copy(alpha = 0.5f),
+                fontFamily = InterFontFamily,
+                fontSize = 13.sp,
+                lineHeight = 17.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
         }
-        if (selected) {
-            Spacer(modifier = Modifier.width(10.dp))
+
+        this@Row.AnimatedVisibility(
+            visible = selected,
+            enter = fadeIn() + scaleIn(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            ),
+            exit = fadeOut() + scaleOut(),
+        ) {
             Icon(
                 painter = painterResource(R.drawable.check),
                 contentDescription = null,
