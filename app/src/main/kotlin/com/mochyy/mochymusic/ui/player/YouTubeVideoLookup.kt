@@ -81,38 +81,73 @@ suspend fun findOfficialMusicVideoId(title: String, artist: String): String? {
     val key = "$title|$artist"
     if (OfficialVideoIdCache.contains(key)) return OfficialVideoIdCache.get(key)
 
-    val results = YouTube.search(query = "$title $artist", filter = YouTube.SearchFilter.FILTER_VIDEO)
-        .getOrElse { return null }.items
+    // Strip packaging from title before searching: "Song (From Film)" → "Song"
+    val searchableTitle = normalizeCanvasSongTitle(title)
+    // normalizeCanvasArtistName already takes the primary/first artist
+    val searchableArtist = normalizeCanvasArtistName(artist)
 
-    val normalizedTitle = normalizeCanvasSongTitle(title)
+    // Search both song and video tabs: songs tab often carries OMV-tagged results that video tab misses
+    val songTabItems = YouTube.search(query = "$searchableTitle $searchableArtist", filter = YouTube.SearchFilter.FILTER_SONG)
+        .getOrNull()?.items.orEmpty().filterIsInstance<SongItem>()
+    val videoTabItems = YouTube.search(query = "$searchableTitle $searchableArtist", filter = YouTube.SearchFilter.FILTER_VIDEO)
+        .getOrNull()?.items.orEmpty().filterIsInstance<SongItem>()
+
+    // Merge: song tab first (better metadata), then video tab as fallback
+    val allCandidates = (songTabItems + videoTabItems).distinctBy { it.id }
+
+    val normalizedTitle = searchableTitle
     val normalizedArtist = normalizeCanvasArtistName(artist)
 
-    val songItems = results.filterIsInstance<SongItem>()
-
-    // Priority 1: Strict Official Music Video (OMV) tag
-    val strictOmvMatch = songItems
+    // Priority 1: Strict Official Music Video (OMV) tag with title+artist match
+    val strictOmvMatch = allCandidates
         .filter { it.musicVideoType == MUSIC_VIDEO_TYPE_OMV }
         .firstOrNull { candidate ->
             val candidateTitle = normalizeCanvasSongTitle(candidate.title)
             val candidateArtist = normalizeCanvasArtistName(candidate.artists.joinToString { it.name })
-            (candidateTitle.contains(normalizedTitle, ignoreCase = true) || normalizedTitle.contains(candidateTitle, ignoreCase = true)) &&
-                (candidateArtist.contains(normalizedArtist, ignoreCase = true) || normalizedArtist.contains(candidateArtist, ignoreCase = true))
+            titleMatches(normalizedTitle, candidateTitle) && artistMatches(normalizedArtist, candidateArtist)
         }
 
-    // Priority 2: Fallback to verified official artist upload / visualizer / lyric video
-    val match = strictOmvMatch ?: songItems
+    // Priority 2: Any OMV tag (looser title match for songs with long film/album suffixes)
+    val looseOmvMatch = strictOmvMatch ?: allCandidates
+        .filter { it.musicVideoType == MUSIC_VIDEO_TYPE_OMV }
+        .firstOrNull { candidate ->
+            val candidateArtist = normalizeCanvasArtistName(candidate.artists.joinToString { it.name })
+            artistMatches(normalizedArtist, candidateArtist)
+        }
+
+    // Priority 3: Any result whose title and artist both match — visualizer, lyric video, official upload
+    val broadMatch = looseOmvMatch ?: allCandidates
         .firstOrNull { candidate ->
             val candidateTitle = normalizeCanvasSongTitle(candidate.title)
             val candidateArtist = normalizeCanvasArtistName(candidate.artists.joinToString { it.name })
-            val titleMatches = candidateTitle.contains(normalizedTitle, ignoreCase = true) ||
-                normalizedTitle.contains(candidateTitle, ignoreCase = true)
-            val artistMatches = candidateArtist.isEmpty() ||
-                candidateArtist.contains(normalizedArtist, ignoreCase = true) ||
-                normalizedArtist.contains(candidateArtist, ignoreCase = true)
-            titleMatches && artistMatches
+            titleMatches(normalizedTitle, candidateTitle) && artistMatches(normalizedArtist, candidateArtist)
         }
+
+    // Priority 4: Title-only match when artist is missing or unrecognised in search results
+    val match = broadMatch ?: allCandidates
+        .firstOrNull { candidate ->
+            val candidateTitle = normalizeCanvasSongTitle(candidate.title)
+            titleMatches(normalizedTitle, candidateTitle)
+        }
+
     OfficialVideoIdCache.put(key, match?.id)
     return match?.id
+}
+
+// two strings count as a title match if either contains the other's core words
+private fun titleMatches(a: String, b: String): Boolean {
+    if (a.isBlank() || b.isBlank()) return false
+    return a.contains(b, ignoreCase = true) || b.contains(a, ignoreCase = true)
+}
+
+// artist matches when either side is empty (unknown) or they share at least one word
+private fun artistMatches(want: String, got: String): Boolean {
+    if (got.isEmpty()) return true
+    if (want.contains(got, ignoreCase = true) || got.contains(want, ignoreCase = true)) return true
+    // partial: each artist may credit just the lead singer; check shared words
+    val wantWords = want.lowercase().split(" ", ",", "&").filter { it.length > 2 }.toSet()
+    val gotWords = got.lowercase().split(" ", ",", "&").filter { it.length > 2 }.toSet()
+    return wantWords.any { it in gotWords }
 }
 
 private object OfficialVideoIdCache {

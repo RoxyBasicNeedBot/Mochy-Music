@@ -281,8 +281,10 @@ internal fun VideoQualitySheet(session: YouTubeVideoSession?, onDismiss: () -> U
     val (quality, setQuality) = rememberEnumPreference(VideoQualityKey, VideoQuality.Q1080)
     val sizes = session?.sizes.orEmpty()
     val options = remember(sizes) {
-        listOf(VideoQuality.AUTO) + VideoQuality.entries.filter {
-            it != VideoQuality.AUTO && (sizes.isEmpty() || it.shortSide in sizes)
+        listOf(VideoQuality.AUTO) + VideoQuality.entries.filter { quality ->
+            quality != VideoQuality.AUTO &&
+                // when video has loaded, show only sizes it actually has; before that show all so user can pre-pick
+                (sizes.isEmpty() || quality.shortSide in sizes)
         }
     }
     MenuSheetSurface(onDismiss = onDismiss, wrapHeight = true) { _ ->
@@ -331,8 +333,7 @@ internal fun VideoQualitySheet(session: YouTubeVideoSession?, onDismiss: () -> U
                     fontSize = 12.sp,
                     modifier = Modifier.padding(start = 4.dp, top = 4.dp),
                 )
-            }
-        }
+            }        }
     }
 }
 
