@@ -155,7 +155,20 @@ class YouTubeVideoSession internal constructor(context: Context, val videoId: St
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            main.post { failures += 1 }
+            if (quality != VideoQuality.AUTO) {
+                // If a high fixed quality fails due to slow network or decoding, fallback gracefully to Auto
+                handler.post {
+                    quality = VideoQuality.AUTO
+                    val p = player ?: return@post
+                    applyQuality(p)
+                    val s = streams ?: return@post
+                    seekStartedAt = SystemClock.elapsedRealtime()
+                    p.setMediaSource(mediaSourceFor(s), p.currentPosition)
+                    p.prepare()
+                }
+            } else {
+                main.post { failures += 1 }
+            }
         }
     }
 
@@ -325,9 +338,23 @@ class YouTubeVideoSession internal constructor(context: Context, val videoId: St
         p.setPlaybackSpeed(value)
     }
 
+    private var stallStartedAt = 0L
+
     private fun publishStall() {
         val p = player ?: return
         val stalled = p.playWhenReady && p.playbackState == Player.STATE_BUFFERING
+        if (stalled) {
+            if (stallStartedAt == 0L) {
+                stallStartedAt = SystemClock.elapsedRealtime()
+            } else if (quality != VideoQuality.AUTO && SystemClock.elapsedRealtime() - stallStartedAt > 8_000L) {
+                // If buffering for more than 8 seconds on slow internet, fall back to Auto
+                stallStartedAt = 0L
+                quality = VideoQuality.AUTO
+                applyQuality(p)
+            }
+        } else {
+            stallStartedAt = 0L
+        }
         main.post { isStalled = stalled }
     }
 }

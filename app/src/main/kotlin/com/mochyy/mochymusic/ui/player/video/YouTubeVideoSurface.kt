@@ -84,7 +84,7 @@ fun DriveYouTubeVideo(
     autoCap: Int,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
-    val (quality) = rememberEnumPreference(VideoQualityKey, VideoQuality.AUTO)
+    val (quality) = rememberEnumPreference(VideoQualityKey, VideoQuality.Q1080)
     // nothing to show with the app in the background, so the picture stops there too
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val running by rememberUpdatedState(isPlaying && lifecycle.isAtLeast(Lifecycle.State.STARTED))

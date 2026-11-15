@@ -82,6 +82,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import com.mochyy.mochymusic.ui.component.RemoteFocus
+import com.mochyy.mochymusic.constants.VideoQuality
+import com.mochyy.mochymusic.constants.VideoQualityKey
+import com.mochyy.mochymusic.utils.rememberEnumPreference
 
 // how far down the top row sits; how far in from the sides comes from the frame, upright or sideways
 private val TopRow = 32.dp
@@ -121,12 +124,14 @@ internal fun BoxScope.VideoTopBar(
     frame: VideoFrame,
     state: VideoModeState,
     controls: () -> Float,
+    session: YouTubeVideoSession? = null,
+    onOpenQuality: (() -> Unit)? = null,
     onClose: () -> Unit,
     onSongInfo: () -> Unit,
     onExitFullScreen: () -> Unit,
 ) {
     val visible by rememberControlsVisible(controls)
-    val buttonCount = 2
+    val buttonCount = if (onOpenQuality != null) 3 else 2
     val buttonsWidth = TopButtonSize * buttonCount + TopButtonGap * (buttonCount - 1)
     AsyncImage(
         model = track.thumbnailUrl?.resize(240, 240),
@@ -201,7 +206,44 @@ internal fun BoxScope.VideoTopBar(
                 .align(Alignment.TopEnd)
                 .padding(end = frame.edgeEnd, top = TopRow + 9.dp)
                 .graphicsLayer { alpha = controls() },
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onOpenQuality != null) {
+                val (quality) = rememberEnumPreference(VideoQualityKey, VideoQuality.Q1080)
+                val badgeText = remember(quality, session?.playingShortSide) {
+                    val side = session?.playingShortSide ?: 0
+                    when {
+                        side >= 2160 -> "4K"
+                        side > 0 -> "${side}p"
+                        quality == VideoQuality.Q2160 -> "4K"
+                        quality != VideoQuality.AUTO -> "${quality.shortSide}p"
+                        else -> "1080p"
+                    }
+                }
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .height(TopButtonSize)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.White.copy(alpha = 0.22f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = RemoteFocus,
+                            onClick = guarded(onOpenQuality),
+                        )
+                        .padding(horizontal = 9.dp)
+                        .semantics { contentDescription = "Video quality: $badgeText" },
+                ) {
+                    Text(
+                        text = badgeText,
+                        color = Color.White,
+                        fontFamily = InterFontFamily,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.3.sp,
+                    )
+                }
+            }
             TopButton(R.drawable.fullscreen_exit, stringResource(R.string.video_mode_exit_full_screen), guarded(onExitFullScreen))
             TopButton(R.drawable.close, stringResource(R.string.video_mode_close_player), guarded(onClose))
         }

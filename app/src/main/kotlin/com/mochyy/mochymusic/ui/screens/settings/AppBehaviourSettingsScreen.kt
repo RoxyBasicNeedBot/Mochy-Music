@@ -617,7 +617,7 @@ private fun playerLookItems(navController: NavController): List<SettingsItem> {
 // how sharp youtube videos play, on the cover and in the full video mode
 @Composable
 private fun videoQualityItem(): SettingsItem {
-    val (quality, onQuality) = rememberEnumPreference(VideoQualityKey, defaultValue = VideoQuality.AUTO)
+    val (quality, onQuality) = rememberEnumPreference(VideoQualityKey, defaultValue = VideoQuality.Q1080)
     val overlay = LocalZoomOutOverlayState.current
     val title = stringResource(R.string.video_quality)
     return SettingsItem(

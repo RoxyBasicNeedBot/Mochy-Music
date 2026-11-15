@@ -314,6 +314,7 @@ private fun VideoModeLayout(
         val slidePx = with(density) { frame.videoSlide.toPx() }
         val paneShift = with(density) { frame.paneWidth.toPx() } / 2f
         val regularMounted by remember { derivedStateOf { state.pane.value < 0.999f || state.paneDragging } }
+        var qualityOpen by remember { mutableStateOf(false) }
 
         Box(
             modifier = Modifier
@@ -447,6 +448,8 @@ private fun VideoModeLayout(
                 frame = frame,
                 state = state,
                 controls = controls,
+                session = session,
+                onOpenQuality = { qualityOpen = true },
                 onClose = onClose,
                 onSongInfo = { state.songInfoOpen = true },
                 onExitFullScreen = onExitFullScreen,
@@ -461,6 +464,10 @@ private fun VideoModeLayout(
                 onChevron = { state.menuOpen = true },
             )
             VideoPaneHandle(frame = frame, state = state)
+
+            if (qualityOpen) {
+                VideoQualitySheet(session = session, onDismiss = { qualityOpen = false })
+            }
         }
     }
 }

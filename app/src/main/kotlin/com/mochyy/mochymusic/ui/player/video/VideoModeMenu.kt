@@ -78,7 +78,7 @@ internal fun VideoModeMenu(
 ) {
     val connection = LocalPlayerConnection.current ?: return
     val track by connection.uiState.trackInfo.collectAsState()
-    val (quality) = rememberEnumPreference(VideoQualityKey, VideoQuality.AUTO)
+    val (quality) = rememberEnumPreference(VideoQualityKey, VideoQuality.Q1080)
     val (wholeVideo, setWholeVideo) = rememberPreference(VideoModeWholeVideoKey, defaultValue = false)
     var showQuality by remember { mutableStateOf(false) }
     var showProvider by remember { mutableStateOf(false) }
@@ -278,7 +278,7 @@ internal fun qualityLabel(quality: VideoQuality, session: YouTubeVideoSession?):
 // auto, then every size this video really comes in (all of them until it has loaded)
 @Composable
 internal fun VideoQualitySheet(session: YouTubeVideoSession?, onDismiss: () -> Unit) {
-    val (quality, setQuality) = rememberEnumPreference(VideoQualityKey, VideoQuality.AUTO)
+    val (quality, setQuality) = rememberEnumPreference(VideoQualityKey, VideoQuality.Q1080)
     val sizes = session?.sizes.orEmpty()
     val options = remember(sizes) {
         listOf(VideoQuality.AUTO) + VideoQuality.entries.filter {
@@ -318,6 +318,7 @@ internal fun VideoQualitySheet(session: YouTubeVideoSession?, onDismiss: () -> U
                     selected = option == quality,
                     onClick = {
                         setQuality(option)
+                        session?.setQuality(option, 2160)
                         close()
                     },
                 )

@@ -87,14 +87,29 @@ suspend fun findOfficialMusicVideoId(title: String, artist: String): String? {
     val normalizedTitle = normalizeCanvasSongTitle(title)
     val normalizedArtist = normalizeCanvasArtistName(artist)
 
-    val match = results
-        .filterIsInstance<SongItem>()
+    val songItems = results.filterIsInstance<SongItem>()
+
+    // Priority 1: Strict Official Music Video (OMV) tag
+    val strictOmvMatch = songItems
         .filter { it.musicVideoType == MUSIC_VIDEO_TYPE_OMV }
         .firstOrNull { candidate ->
             val candidateTitle = normalizeCanvasSongTitle(candidate.title)
             val candidateArtist = normalizeCanvasArtistName(candidate.artists.joinToString { it.name })
             (candidateTitle.contains(normalizedTitle, ignoreCase = true) || normalizedTitle.contains(candidateTitle, ignoreCase = true)) &&
                 (candidateArtist.contains(normalizedArtist, ignoreCase = true) || normalizedArtist.contains(candidateArtist, ignoreCase = true))
+        }
+
+    // Priority 2: Fallback to verified official artist upload / visualizer / lyric video
+    val match = strictOmvMatch ?: songItems
+        .firstOrNull { candidate ->
+            val candidateTitle = normalizeCanvasSongTitle(candidate.title)
+            val candidateArtist = normalizeCanvasArtistName(candidate.artists.joinToString { it.name })
+            val titleMatches = candidateTitle.contains(normalizedTitle, ignoreCase = true) ||
+                normalizedTitle.contains(candidateTitle, ignoreCase = true)
+            val artistMatches = candidateArtist.isEmpty() ||
+                candidateArtist.contains(normalizedArtist, ignoreCase = true) ||
+                normalizedArtist.contains(candidateArtist, ignoreCase = true)
+            titleMatches && artistMatches
         }
     OfficialVideoIdCache.put(key, match?.id)
     return match?.id
